@@ -70,9 +70,10 @@ Serves on `PORT` (default 3000).
 3–20 players. The admin can switch to 2 imposters once there are 4+ people, and can remove
 anyone from the player list.
 
-The imposter is never the same person two rounds running, and the role goes to whoever has
-had it least often in that room, with ties broken randomly. Pure random picking is uniform
-but streaky — it hands one person three rounds in a row often enough to feel rigged.
+The imposter is drawn fresh at random every round, independent of every round before it —
+no rotation, no "not you again" rule. Those feel fairer but leak information: in a group of
+four, "never twice in a row" tells everyone one person is safe before a word is spoken. So
+yes, the same person can get it twice running. That's what random looks like.
 
 ## Layout
 

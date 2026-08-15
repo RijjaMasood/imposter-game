@@ -56,33 +56,21 @@ function pickWord(room) {
 }
 
 /**
- * Pick the imposter(s).
+ * Pick the imposter(s): a fresh uniform draw every round, independent of every
+ * round before it.
  *
- * A plain random pick is uniform but streaky — the same person genuinely can
- * get it three rounds running, and it feels rigged. So: never repeat last
- * round's imposter while there's anyone else to choose, and among the rest
- * favour whoever has been imposter least in this room. Ties broken randomly,
- * so it stays unguessable.
+ * Deliberately NOT balanced or rotated. Any rule like "not the same person
+ * twice" or "whoever has had it least" is information players can reason
+ * about — with a small group it narrows the suspects before anyone has said a
+ * word. Streaks are the price of a draw nobody can deduce.
  */
 function pickImposters(room, count) {
-  const tally = room.imposterTally || (room.imposterTally = {});
-  const lastRound = room.lastImposterIds || [];
-
-  let pool = room.players.filter((p) => !lastRound.includes(p.id));
-  if (pool.length < count) pool = room.players.slice();
-
-  const picked = [];
-  while (picked.length < count && pool.length) {
-    const fewest = Math.min(...pool.map((p) => tally[p.id] || 0));
-    const tier = pool.filter((p) => (tally[p.id] || 0) === fewest);
-    const chosen = tier[crypto.randomInt(tier.length)];
-    picked.push(chosen);
-    pool = pool.filter((p) => p.id !== chosen.id);
+  const pool = room.players.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-
-  for (const p of picked) tally[p.id] = (tally[p.id] || 0) + 1;
-  room.lastImposterIds = picked.map((p) => p.id);
-  return picked;
+  return pool.slice(0, count);
 }
 
 function fail(res, status, message) {
