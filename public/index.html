@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0d13" />
+<meta name="description" content="Imposter — a dead-simple party game for people sitting in the same room." />
+<title>Imposter</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕵️</text></svg>" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<main class="wrap">
+
+  <!-- ---------------------------------------------------------------- home -->
+  <section id="screen-home" class="screen">
+    <header class="brand">
+      <div class="brand-mark">🕵️</div>
+      <h1>Imposter</h1>
+      <p class="sub">Everyone gets the same word. One of you gets nothing. Talk it out, then vote.</p>
+    </header>
+
+    <div class="card">
+      <label class="field">
+        <span>Your name</span>
+        <input id="input-name" type="text" maxlength="16" autocomplete="nickname"
+               placeholder="e.g. Rijja" enterkeyhint="go" />
+      </label>
+
+      <button id="btn-create" class="btn btn-primary">Create a room</button>
+
+      <div class="divider"><span>or join one</span></div>
+
+      <label class="field">
+        <span>Room code</span>
+        <input id="input-code" type="text" maxlength="4" inputmode="text"
+               autocapitalize="characters" autocomplete="off" spellcheck="false"
+               placeholder="ABCD" class="code-input" enterkeyhint="go" />
+      </label>
+
+      <button id="btn-join" class="btn">Join room</button>
+    </div>
+
+    <p class="foot">Made for people in the same room. Phones for roles, mouths for the rest.</p>
+  </section>
+
+  <!-- ---------------------------------------------------------------- room -->
+  <section id="screen-room" class="screen" hidden>
+
+    <header class="room-head">
+      <button id="btn-code" class="code-chip" title="Copy the invite link">
+        <span class="code-chip-label">ROOM</span>
+        <strong id="room-code">----</strong>
+      </button>
+      <div class="room-head-right">
+        <span id="round-badge" class="badge" hidden></span>
+        <button id="btn-leave" class="link-btn">Leave</button>
+      </div>
+    </header>
+
+    <!-- players -->
+    <div class="card players-card">
+      <div class="card-title">
+        <span>Players</span>
+        <span id="player-count" class="muted">0</span>
+      </div>
+      <ul id="player-list" class="players"></ul>
+    </div>
+
+    <!-- lobby -->
+    <div id="panel-lobby" class="card" hidden>
+      <h2 class="panel-title">Waiting to start</h2>
+      <p id="lobby-hint" class="muted">The admin starts the round when everyone's in.</p>
+
+      <div id="admin-lobby" hidden>
+        <div class="seg">
+          <span class="seg-label">Imposters</span>
+          <div class="seg-buttons">
+            <button class="seg-btn" data-imposters="1">1</button>
+            <button class="seg-btn" data-imposters="2">2</button>
+          </div>
+        </div>
+        <button id="btn-start" class="btn btn-primary">Start round</button>
+      </div>
+    </div>
+
+    <!-- reveal -->
+    <div id="panel-reveal" class="card" hidden>
+      <h2 class="panel-title">Your word</h2>
+      <button id="reveal-card" class="reveal" aria-label="Hold to reveal your word">
+        <div class="reveal-hidden">
+          <span class="reveal-eye">👁️</span>
+          <span>Hold to reveal</span>
+          <small>Don't let anyone else see</small>
+        </div>
+        <div class="reveal-shown" hidden>
+          <span id="reveal-word" class="reveal-word"></span>
+          <small id="reveal-role" class="reveal-role"></small>
+        </div>
+      </button>
+      <p class="muted center">Now talk. Describe it without saying it. The imposter is bluffing.</p>
+      <button id="btn-open-voting" class="btn btn-primary" hidden>Open voting</button>
+      <p id="reveal-wait" class="muted center small">The admin opens voting when you're ready.</p>
+    </div>
+
+    <!-- voting -->
+    <div id="panel-voting" class="card" hidden>
+      <h2 class="panel-title">Who's the imposter?</h2>
+      <p id="vote-progress" class="muted center"></p>
+      <div id="vote-options" class="vote-grid"></div>
+      <button id="btn-close-voting" class="btn" hidden>Close voting &amp; show results</button>
+    </div>
+
+    <!-- results -->
+    <div id="panel-results" class="card" hidden>
+      <div id="verdict" class="verdict"></div>
+      <div class="word-reveal">
+        <span class="muted small">The word was</span>
+        <strong id="result-word"></strong>
+      </div>
+      <div id="result-imposters" class="imposters"></div>
+      <ul id="result-tally" class="tally"></ul>
+      <div id="admin-results" class="stack" hidden>
+        <button id="btn-again" class="btn btn-primary">Next round</button>
+        <button id="btn-lobby" class="btn">Back to lobby</button>
+      </div>
+      <p id="results-wait" class="muted center small">Waiting for the admin to deal the next round.</p>
+    </div>
+
+  </section>
+</main>
+
+<script src="/game.js"></script>
+</body>
+</html>
