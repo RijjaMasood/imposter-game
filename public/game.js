@@ -25,7 +25,20 @@ function toast(message) {
   el.textContent = message;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+
+  // On a phone the toast can sit behind the on-screen keyboard, which makes a
+  // failed join look like the button did nothing. Mirror it into the card.
+  if (!$('screen-home').hidden) {
+    const box = $('home-error');
+    box.textContent = message;
+    box.hidden = false;
+  }
+}
+
+function clearHomeError() {
+  $('home-error').hidden = true;
+  $('home-error').textContent = '';
 }
 
 async function api(method, path, body) {
@@ -87,6 +100,8 @@ function enterRoom(payload) {
 }
 
 $('btn-create').onclick = action($('btn-create'), async () => {
+  clearHomeError();
+  if (document.activeElement) document.activeElement.blur();
   const name = $('input-name').value.trim();
   if (!name) return toast('Enter your name first.');
   LS.name = name;
@@ -94,12 +109,19 @@ $('btn-create').onclick = action($('btn-create'), async () => {
 });
 
 $('btn-join').onclick = action($('btn-join'), async () => {
+  clearHomeError();
+  if (document.activeElement) document.activeElement.blur();
   const name = $('input-name').value.trim();
   const code = $('input-code').value.trim().toUpperCase();
   if (!name) return toast('Enter your name first.');
-  if (code.length !== 4) return toast('Room codes are 4 characters.');
+  if (!code) return toast('Enter the room code the admin read out.');
+  if (code.length !== 4) return toast(`Room codes are 4 characters — you typed ${code.length}.`);
   LS.name = name;
-  enterRoom(await api('POST', `/api/rooms/${code}/join`, { name, playerId: LS.id }));
+  // A leftover id from an old room must not be sent, or the server treats this
+  // as a re-join of a room this person is not actually in.
+  const body = { name };
+  if (LS.code === code && LS.id) body.playerId = LS.id;
+  enterRoom(await api('POST', `/api/rooms/${code}/join`, body));
 });
 
 $('input-code').addEventListener('input', (e) => {
@@ -126,17 +148,32 @@ function stopPolling() {
   pollTimer = null;
 }
 
+// A single bad response is not a reason to throw someone out of a game — a
+// redeploy, a sleeping free instance, or a dropped bar of signal all look the
+// same for a second. Only give up after several misses in a row.
+const MAX_MISSES = 4;
+let misses = 0;
+
 async function poll() {
   if (!LS.code || !LS.id || document.hidden || busy) return;
   try {
     const { state: next } = await api('GET', `/api/rooms/${LS.code}?playerId=${encodeURIComponent(LS.id)}`);
+    misses = 0;
+    setConnected(true);
     render(next);
   } catch (err) {
+    misses++;
+    setConnected(false);
+    if (misses < MAX_MISSES) return;
     if (err.status === 403 || err.status === 404) {
-      goHome(err.message);
+      goHome('That room is gone — the server restarted. Make a new one.');
     }
-    // network blips: keep polling silently
   }
+}
+
+function setConnected(on) {
+  const badge = $('conn');
+  badge.hidden = on;
 }
 
 document.addEventListener('visibilitychange', () => {

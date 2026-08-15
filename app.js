@@ -43,17 +43,59 @@ function cleanCode(raw) {
     .slice(0, 4);
 }
 
-function shuffle(list) {
-  const out = list.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = crypto.randomInt(i + 1);
-    [out[i], out[j]] = [out[j], out[i]];
+/** A word the room has not had recently. */
+function pickWord(room) {
+  const recent = room.recentWords || (room.recentWords = []);
+  let word = WORDS[crypto.randomInt(WORDS.length)];
+  for (let tries = 0; tries < 20 && recent.includes(word); tries++) {
+    word = WORDS[crypto.randomInt(WORDS.length)];
   }
-  return out;
+  recent.push(word);
+  if (recent.length > 20) recent.shift();
+  return word;
+}
+
+/**
+ * Pick the imposter(s).
+ *
+ * A plain random pick is uniform but streaky — the same person genuinely can
+ * get it three rounds running, and it feels rigged. So: never repeat last
+ * round's imposter while there's anyone else to choose, and among the rest
+ * favour whoever has been imposter least in this room. Ties broken randomly,
+ * so it stays unguessable.
+ */
+function pickImposters(room, count) {
+  const tally = room.imposterTally || (room.imposterTally = {});
+  const lastRound = room.lastImposterIds || [];
+
+  let pool = room.players.filter((p) => !lastRound.includes(p.id));
+  if (pool.length < count) pool = room.players.slice();
+
+  const picked = [];
+  while (picked.length < count && pool.length) {
+    const fewest = Math.min(...pool.map((p) => tally[p.id] || 0));
+    const tier = pool.filter((p) => (tally[p.id] || 0) === fewest);
+    const chosen = tier[crypto.randomInt(tier.length)];
+    picked.push(chosen);
+    pool = pool.filter((p) => p.id !== chosen.id);
+  }
+
+  for (const p of picked) tally[p.id] = (tally[p.id] || 0) + 1;
+  room.lastImposterIds = picked.map((p) => p.id);
+  return picked;
 }
 
 function fail(res, status, message) {
   return res.status(status).json({ error: message });
+}
+
+/**
+ * Express 4 does not catch rejections from async handlers — an unhandled
+ * rejection takes the whole process down, and with it every open room.
+ * Every async route goes through here.
+ */
+function wrap(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
 /** Load the room and the acting player, or send the right error. */
@@ -193,7 +235,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Create a room. The creator is the admin.
-app.post('/api/rooms', async (req, res) => {
+app.post('/api/rooms', wrap(async (req, res) => {
   const name = cleanName(req.body && req.body.name);
   if (!name) return fail(res, 400, 'Enter your name first.');
 
@@ -217,10 +259,10 @@ app.post('/api/rooms', async (req, res) => {
   };
   await setRoom(room);
   res.json({ code, playerId, state: viewFor(room, playerId) });
-});
+}));
 
 // Join an existing room (or re-join with an id you already hold).
-app.post('/api/rooms/:code/join', async (req, res) => {
+app.post('/api/rooms/:code/join', wrap(async (req, res) => {
   const code = cleanCode(req.params.code);
   const name = cleanName(req.body && req.body.name);
   const existingId = String((req.body && req.body.playerId) || '');
@@ -250,10 +292,10 @@ app.post('/api/rooms/:code/join', async (req, res) => {
   room.players.push({ id: playerId, name, lastSeen: Date.now() });
   await setRoom(room);
   res.json({ code, playerId, state: viewFor(room, playerId) });
-});
+}));
 
 // Poll for state. Also doubles as the presence heartbeat.
-app.get('/api/rooms/:code', async (req, res) => {
+app.get('/api/rooms/:code', wrap(async (req, res) => {
   const code = cleanCode(req.params.code);
   const room = await getRoom(code);
   if (!room) return fail(res, 404, 'Room not found.');
@@ -265,10 +307,10 @@ app.get('/api/rooms/:code', async (req, res) => {
   player.lastSeen = Date.now();
   await setRoom(room);
   res.json({ state: viewFor(room, playerId) });
-});
+}));
 
 // Admin: how many imposters this round.
-app.post('/api/rooms/:code/imposters', async (req, res) => {
+app.post('/api/rooms/:code/imposters', wrap(async (req, res) => {
   const ctx = await load(req, res, { requireHost: true });
   if (!ctx) return;
   const { room, player } = ctx;
@@ -280,10 +322,10 @@ app.post('/api/rooms/:code/imposters', async (req, res) => {
   room.imposterCount = count;
   await setRoom(room);
   res.json({ state: viewFor(room, player.id) });
-});
+}));
 
 // Admin: deal a word and pick the imposter(s).
-app.post('/api/rooms/:code/start', async (req, res) => {
+app.post('/api/rooms/:code/start', wrap(async (req, res) => {
   const ctx = await load(req, res, { requireHost: true });
   if (!ctx) return;
   const { room, player } = ctx;
@@ -294,21 +336,21 @@ app.post('/api/rooms/:code/start', async (req, res) => {
   if (room.players.length < 3) return fail(res, 409, 'You need at least 3 players.');
 
   const imposterCount = Math.min(room.imposterCount, Math.max(1, room.players.length - 2));
-  const picked = shuffle(room.players).slice(0, imposterCount);
+  const picked = pickImposters(room, imposterCount);
 
   room.round += 1;
   room.phase = 'reveal';
-  room.word = WORDS[crypto.randomInt(WORDS.length)];
+  room.word = pickWord(room);
   room.imposterIds = picked.map((p) => p.id);
   room.votes = {};
   room.result = null;
 
   await setRoom(room);
   res.json({ state: viewFor(room, player.id) });
-});
+}));
 
 // Admin: open voting.
-app.post('/api/rooms/:code/open-voting', async (req, res) => {
+app.post('/api/rooms/:code/open-voting', wrap(async (req, res) => {
   const ctx = await load(req, res, { requireHost: true });
   if (!ctx) return;
   const { room, player } = ctx;
@@ -317,10 +359,10 @@ app.post('/api/rooms/:code/open-voting', async (req, res) => {
   room.votes = {};
   await setRoom(room);
   res.json({ state: viewFor(room, player.id) });
-});
+}));
 
 // Cast (or change) a vote.
-app.post('/api/rooms/:code/vote', async (req, res) => {
+app.post('/api/rooms/:code/vote', wrap(async (req, res) => {
   const ctx = await load(req, res);
   if (!ctx) return;
   const { room, player } = ctx;
@@ -334,10 +376,10 @@ app.post('/api/rooms/:code/vote', async (req, res) => {
   maybeCloseVoting(room);
   await setRoom(room);
   res.json({ state: viewFor(room, player.id) });
-});
+}));
 
 // Admin: close voting early and show results.
-app.post('/api/rooms/:code/close-voting', async (req, res) => {
+app.post('/api/rooms/:code/close-voting', wrap(async (req, res) => {
   const ctx = await load(req, res, { requireHost: true });
   if (!ctx) return;
   const { room, player } = ctx;
@@ -345,20 +387,20 @@ app.post('/api/rooms/:code/close-voting', async (req, res) => {
   tallyAndFinish(room);
   await setRoom(room);
   res.json({ state: viewFor(room, player.id) });
-});
+}));
 
 // Admin: back to the lobby (lets new people join).
-app.post('/api/rooms/:code/lobby', async (req, res) => {
+app.post('/api/rooms/:code/lobby', wrap(async (req, res) => {
   const ctx = await load(req, res, { requireHost: true });
   if (!ctx) return;
   const { room, player } = ctx;
   resetToLobby(room);
   await setRoom(room);
   res.json({ state: viewFor(room, player.id) });
-});
+}));
 
 // Admin: remove someone.
-app.post('/api/rooms/:code/kick', async (req, res) => {
+app.post('/api/rooms/:code/kick', wrap(async (req, res) => {
   const ctx = await load(req, res, { requireHost: true });
   if (!ctx) return;
   const { room, player } = ctx;
@@ -367,16 +409,16 @@ app.post('/api/rooms/:code/kick', async (req, res) => {
   if (!room.players.some((p) => p.id === targetId)) return fail(res, 400, 'Unknown player.');
   await removePlayer(room, targetId);
   res.json({ state: viewFor(room, player.id) });
-});
+}));
 
 // Leave for good.
-app.post('/api/rooms/:code/leave', async (req, res) => {
+app.post('/api/rooms/:code/leave', wrap(async (req, res) => {
   const ctx = await load(req, res);
   if (!ctx) return;
   const { room, player } = ctx;
   await removePlayer(room, player.id);
   res.json({ ok: true });
-});
+}));
 
 app.use('/api', (req, res) => fail(res, 404, 'Unknown endpoint.'));
 

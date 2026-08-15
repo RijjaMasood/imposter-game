@@ -178,6 +178,18 @@ input::placeholder { color: #55607a; }
   background: var(--line);
 }
 
+.home-error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 93, 115, 0.12);
+  border: 1px solid rgba(255, 93, 115, 0.4);
+  color: #ffb3bd;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}
+
 /* -------------------------------------------------------------- room head */
 
 .room-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -207,6 +219,7 @@ input::placeholder { color: #55607a; }
   border-radius: 999px;
   padding: 6px 11px;
 }
+.badge.warn { color: #ffb3bd; border-color: rgba(255, 93, 115, 0.4); }
 
 /* ---------------------------------------------------------------- players */
 

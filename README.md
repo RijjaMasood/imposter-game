@@ -17,8 +17,21 @@ No accounts, no database, no build step.
 Point it at this repo. `render.yaml` is already here, so it just works: rooms live in the
 server's memory, which is exactly what a single always-on server is good at.
 
-> On Render's free plan the service sleeps after ~15 min idle and wakes with empty memory —
-> any room open at that moment is gone. Fine for a game night; upgrade if you care.
+> **Rooms live in memory, so a restart wipes them.** On Render's free plan the service
+> sleeps after ~15 min with no traffic and wakes up empty, and every redeploy restarts it
+> too. Symptom: everyone gets bounced to the home screen and new joins say "No room with
+> that code." If that keeps happening, attach Redis (below) — then rooms survive restarts.
+
+#### Make rooms survive restarts (any host, ~2 min, free)
+
+1. Create a free database at [upstash.com](https://upstash.com) → Redis.
+2. Copy its **REST URL** and **REST token**.
+3. Render dashboard → your service → **Environment** → add:
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+4. Save — it redeploys itself.
+
+Confirm it took at `/api/health`: it should say `"storage":"redis"` instead of `"memory"`.
 
 ### Vercel
 
@@ -55,6 +68,10 @@ Serves on `PORT` (default 3000).
 
 3–20 players. The admin can switch to 2 imposters once there are 4+ people, and can remove
 anyone from the player list.
+
+The imposter is never the same person two rounds running, and the role goes to whoever has
+had it least often in that room, with ties broken randomly. Pure random picking is uniform
+but streaky — it hands one person three rounds in a row often enough to feel rigged.
 
 ## Layout
 
